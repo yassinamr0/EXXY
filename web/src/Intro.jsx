@@ -2,14 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import './intro.css'
 
-const BASE = `${import.meta.env.BASE_URL}intro/`
-const SHOP_URL = 'https://exxyshop.com/collections/all'
+const BASE = import.meta.env.BASE_URL
+const VIDEO = `${BASE}intro/`
 
-// The camera lands at 2.6 s (blender/terrace.py GLIDE_LAND); start the reveal
-// a beat before so the name settles as the camera stops.
-const REVEAL_AT = 2.45
-// If the video hasn't started by then (slow network, Low Power Mode), show the
-// landed view instead of a frozen first frame.
+// The camera lands (and the wall has bloomed to pure white) at 2.6 s
+// (blender/terrace.py GLIDE_LAND / BLOOM): that is when the page takes over.
+const LAND_AT = 2.6
+// If the video hasn't started by then (slow network, Low Power Mode), go
+// straight to the page instead of showing a frozen first frame.
 const STALL_MS = 4000
 
 const portraitQuery = matchMedia('(max-aspect-ratio: 1/1)')
@@ -31,86 +31,81 @@ export default function Intro() {
   // the video is picked once, for the screen shape at load
   const [videoOrientation] = useState(orientation)
   const [landed, setLanded] = useState(reducedMotion || saveData)
-  const [stillOnly, setStillOnly] = useState(reducedMotion || saveData)
+  const [videoDone, setVideoDone] = useState(reducedMotion || saveData)
   const video = useRef(null)
-  const overlay = useRef(null)
+  const stage = useRef(null)
 
-  // play, and land when the camera does (or straight away if playback fails)
+  const finish = () => {
+    setLanded(true)
+    setVideoDone(true)
+  }
+
+  // play, and hand over to the page when the camera lands
   useEffect(() => {
     const v = video.current
-    if (!v || stillOnly) return
+    if (!v) return
     let frame
     const watch = () => {
-      if (v.currentTime >= REVEAL_AT) return setLanded(true)
+      if (v.currentTime >= LAND_AT) return setLanded(true)
       frame = requestAnimationFrame(watch)
     }
-    const fail = () => {
-      setStillOnly(true)
-      setLanded(true)
-    }
-    v.play().then(watch, fail)
-    const stall = setTimeout(() => v.currentTime < 0.1 && fail(), STALL_MS)
-    v.addEventListener('error', fail)
+    v.play().then(watch, finish)
+    const stall = setTimeout(() => v.currentTime < 0.1 && finish(), STALL_MS)
+    v.addEventListener('error', finish)
     return () => {
       cancelAnimationFrame(frame)
       clearTimeout(stall)
-      v.removeEventListener('error', fail)
+      v.removeEventListener('error', finish)
     }
-  }, [stillOnly])
+  }, [])
 
-  // turning the phone mid-intro swaps to the landed picture for the new shape
+  // turning the phone mid-intro skips to the page, laid out for the new shape
   useEffect(() => {
-    if (orientation !== videoOrientation) setLanded(true)
+    if (orientation !== videoOrientation) finish()
   }, [orientation, videoOrientation])
 
-  // the one orchestrated moment: the name tightens into place as the camera brakes
+  // the page's only motion: the words and button appear once the screen is white
   useLayoutEffect(() => {
-    if (!landed) return
+    if (!landed || reducedMotion) return
     const ctx = gsap.context(() => {
-      if (reducedMotion) return
-      gsap.timeline()
-        .from('.wordmark', { '--track': '0.9em', opacity: 0, duration: 1.3, ease: 'expo.out' })
-        .from('.floor', { opacity: 0, duration: 0.8, ease: 'power2.out' }, 0.45)
-    }, overlay)
+      gsap.from('.details', { opacity: 0, duration: 0.9, ease: 'power2.out' })
+    }, stage)
     return () => ctx.revert()
   }, [landed])
 
   const skip = () => {
     video.current?.pause()
-    setStillOnly(true)
-    setLanded(true)
+    finish()
   }
-
-  // after a rotation, or when there is no video, show the landed frame as a picture
-  const showVideo = !stillOnly && orientation === videoOrientation
 
   return (
     <main className={`intro ${orientation}`}>
-      <div className="stage" ref={overlay}>
-        {showVideo ? (
+      <div className="stage" ref={stage}>
+        {/* sits exactly where the logo lands in the video, so the handover is invisible */}
+        <h1 className="mark">
+          <img src={`${BASE}exxy-logo.svg`} alt="EXXY" />
+        </h1>
+
+        {!videoDone && orientation === videoOrientation && (
           <video
             ref={video}
             className="backdrop"
-            src={`${BASE}${videoOrientation}.mp4`}
-            poster={`${BASE}${videoOrientation}-start.jpg`}
+            src={`${VIDEO}${videoOrientation}.mp4`}
+            poster={`${VIDEO}${videoOrientation}-start.jpg`}
             muted
             playsInline
             preload="auto"
             aria-hidden="true"
-            onEnded={() => setLanded(true)}
+            onEnded={() => setVideoDone(true)}
           />
-        ) : (
-          <img className="backdrop" src={`${BASE}${orientation}-end.jpg`} alt="" />
         )}
 
         {landed && (
-          <>
-            <h1 className="wordmark">EXXY</h1>
-            <div className="floor">
-              <p className="tagline">Outdoor furniture, made in Egypt since 1999.</p>
-              <a className="enter" href={SHOP_URL}>Explore the collection</a>
-            </div>
-          </>
+          <div className="details">
+            <p className="tagline">Outdoor furniture, made in Egypt since 1999.</p>
+            {/* demo only: the shop isn't connected yet */}
+            <button type="button" className="shop">Shop now</button>
+          </div>
         )}
       </div>
 

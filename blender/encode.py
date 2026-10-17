@@ -50,6 +50,12 @@ def main():
         sys.exit(f"unsupported output {ext}: use .mp4 or .webm")
 
     scene = bpy.context.scene
+    # the frames are already finished pictures: pass them through untouched
+    # (the default AgX view would tone-map them a second time and turn white grey)
+    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.look = "None"
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.gamma = 1.0
     edit = scene.sequence_editor_create()
     strip = edit.strips.new_image("frames", os.path.join(folder, names[0]), 1, 1)
     for name in names[1:]:

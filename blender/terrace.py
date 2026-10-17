@@ -32,6 +32,7 @@ import ex_ta_05  # noqa: E402
 import ex_ta_06  # noqa: E402
 import lib  # noqa: E402
 import lines  # noqa: E402
+import logo  # noqa: E402
 import panama_sunbed  # noqa: E402
 import stef  # noqa: E402
 
@@ -46,8 +47,22 @@ OPEN_W, OPEN_H = 3.2, 2.7
 BALCONY = 2.5       # floor beyond the far wall
 SUN_FROM = Vector((-7, 9, 4.0))    # low sun: ahead and to the left
 SUN_COLOR = (1.0, 0.66, 0.40)
-CAMERA = {"location": (0, -9.8, 1.5), "target": (0, 9, 1.35)}
-GLIDE_END = (0, 3.0, 1.45)   # --animate: the camera stops here, the opening framed ahead
+# Freestanding white wall across the walkway, just past the last dining sets,
+# with the EXXY logo flat on its face. The glide ends close enough that the
+# wall fills the whole frame, so the video hands over to a white web page.
+WALL_Y = 4.8                 # face of the logo wall (towards the camera)
+WALL_W, WALL_H, WALL_T = 3.0, 3.0, 0.2
+LOGO_H = 0.42                # height of the X mark on the wall (m)
+LOGO_Z = 1.45                # height of the mark's centre = the camera's final height
+CAMERA = {"location": (0, -9.8, 1.5), "target": (0, WALL_Y, LOGO_Z)}
+# --animate: the camera stops this far from the wall (portrait, landscape),
+# framing the mark at ~40% of the phone's width / ~30% of the desktop's height
+GLIDE_STOP = {True: 0.93, False: 1.66}
+# During the rush the picture over-exposes until the wall clips to pure white
+# (the web page's white); the logo is masked out and stays black.
+BLOOM = (2.25, 2.6)          # seconds: the wall stays a wall until late, white by landing
+BLOOM_EV = 14.0              # stops of over-exposure at full bloom
+LOGO_INDEX = 1               # object index pass id of the logo decal
 # Glide timing: speed grows exponentially (x GLIDE_RAMP from start to peak) so the
 # build-up is felt all the way, peaks at GLIDE_PEAK s, brakes hard to land at
 # GLIDE_LAND s, then holds still for the wordmark. The lens widens with speed.
@@ -244,6 +259,48 @@ def build_architecture():
     sea.data.materials.append(sea_material())
 
 
+def build_logo_wall():
+    """The freestanding wall the intro ends on, with the logo flat on its face."""
+    boxes_object("Logo wall", [((0, WALL_Y + WALL_T / 2, WALL_H / 2), (WALL_W, WALL_T, WALL_H))],
+                 bpy.data.materials["Stucco"])
+
+    # the logo is a sharp texture rasterised from logo.py, on a decal 1 mm proud of the wall
+    cover = logo.raster(2048)
+    h, w = cover.shape
+    rgba = np.zeros((h, w, 4), np.float32)
+    rgba[..., 3] = cover[::-1]  # Blender images start at the bottom row
+    img = bpy.data.images.new("EXXY logo", w, h, alpha=True)
+    img.pixels.foreach_set(rgba.ravel())
+    img.pack()
+
+    mat = bpy.data.materials.new("Logo paint")
+    mat.use_nodes = True
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    paint = nodes["Principled BSDF"]
+    paint.inputs["Base Color"].default_value = (0, 0, 0, 1)
+    paint.inputs["Roughness"].default_value = 0.7
+    tex = nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    tex.interpolation = "Cubic"
+    mix = nodes.new("ShaderNodeMixShader")
+    links.new(tex.outputs["Alpha"], mix.inputs["Fac"])
+    links.new(nodes.new("ShaderNodeBsdfTransparent").outputs["BSDF"], mix.inputs[1])
+    links.new(paint.outputs["BSDF"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], nodes["Material Output"].inputs["Surface"])
+
+    unit = LOGO_H / logo.H  # metres per logo unit
+    bpy.ops.mesh.primitive_plane_add(size=1)
+    decal = bpy.context.active_object
+    decal.name = "Logo"
+    decal.scale = ((logo.X1 - logo.X0) * unit, (logo.Y1 - logo.Y0) * unit, 1)
+    # centre the X mark itself on the wall; the trademark hangs off to its right
+    mark_mid = (logo.X0 + logo.MARK_X1) / 2
+    decal.location = (((logo.X0 + logo.X1) / 2 - mark_mid) * unit, WALL_Y - 0.001, LOGO_Z)
+    decal.rotation_euler = (math.pi / 2, 0, 0)  # face the camera (-Y), image upright
+    decal.data.materials.append(mat)
+    decal.pass_index = LOGO_INDEX
+
+
 def place(obj, location, rot_z=0.0):
     obj.location = location
     obj.rotation_euler = (0, 0, rot_z)
@@ -393,14 +450,14 @@ def build_camera(portrait=True, seconds=0):
     cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
     bpy.context.scene.camera = cam
     if seconds:
-        animate_glide(cam, seconds)
+        animate_glide(cam, seconds, portrait)
     return cam
 
 
-def animate_glide(cam, seconds):
-    """Glide the camera from the entrance to GLIDE_END, always aimed (and focused)
-    at the sea opening, accelerating the whole way. Motion blur is added in the
-    compositor (see setup_compositor), which is far cheaper than Cycles' own."""
+def animate_glide(cam, seconds, portrait):
+    """Glide the camera from the entrance up to the logo wall (GLIDE_STOP away),
+    always aimed and focused at the logo, accelerating the whole way. Motion blur
+    is added in the compositor (see setup_compositor), far cheaper than Cycles'."""
     scene = bpy.context.scene
     scene.render.fps = FPS
     scene.frame_start, scene.frame_end = 1, round(seconds * FPS)
@@ -412,7 +469,8 @@ def animate_glide(cam, seconds):
     track.track_axis, track.up_axis = "TRACK_NEGATIVE_Z", "UP_Y"
     cam.data.dof.focus_object = target
     # a key on every frame pins the timing curve exactly, whatever the interpolation
-    start, end = Vector(CAMERA["location"]), Vector(GLIDE_END)
+    start = Vector(CAMERA["location"])
+    end = Vector((0, WALL_Y - GLIDE_STOP[portrait], LOGO_Z))
     lens = cam.data.lens
     progress, speed = glide_curve(scene.frame_end - scene.frame_start + 1)
     for i, (p, v) in enumerate(zip(progress, speed)):
@@ -468,10 +526,11 @@ def use_gpu():
     return False
 
 
-def setup_compositor(motion_blur=False):
+def setup_compositor(motion_blur=False, bloom=False):
     """Soft glow around the brightest highlights, like a real lens at sunset.
     With `motion_blur`, smear each frame along the render's speed pass first:
-    a fraction of the cost of path-traced motion blur, near-identical here."""
+    a fraction of the cost of path-traced motion blur, near-identical here.
+    With `bloom`, over-expose everything but the logo during the rush (BLOOM)."""
     scene = bpy.context.scene
     tree = bpy.data.node_groups.new("Lens", "CompositorNodeTree")
     tree.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
@@ -494,9 +553,43 @@ def setup_compositor(motion_blur=False):
     glare.inputs["Size"].default_value = 0.6
     out = tree.nodes.new("NodeGroupOutput")
     tree.links.new(image, glare.inputs["Image"])
-    tree.links.new(glare.outputs["Image"], out.inputs["Image"])
+    image = glare.outputs["Image"]
+    if bloom:
+        image = add_bloom(tree, layers, image)
+    tree.links.new(image, out.inputs["Image"])
     scene.compositing_node_group = tree
-    scene.render.compositor_device = "CPU"  # works on machines without a display driver
+    # GPU compositing is much faster; CPU also works on machines without a display driver
+    scene.render.compositor_device = "GPU" if scene.cycles.device == "GPU" else "CPU"
+
+
+def add_bloom(tree, layers, image):
+    scene = bpy.context.scene
+    scene.view_layers[0].use_pass_object_index = True
+    names = [s.name for s in layers.outputs if s.enabled]
+    index = next((s for s in layers.outputs if s.name in ("Object Index", "IndexOB")), None)
+    assert index, f"no object index pass among {names}"
+    mask = tree.nodes.new("CompositorNodeIDMask")
+    mask.inputs["Index"].default_value = LOGO_INDEX
+    mask.inputs["Anti-Alias"].default_value = True
+    tree.links.new(index, mask.inputs["ID value"])
+
+    exposure = tree.nodes.new("CompositorNodeExposure")
+    tree.links.new(image, exposure.inputs["Image"])
+    ev = exposure.inputs["Exposure"]
+    t0, t1 = BLOOM
+    for frame in range(scene.frame_start, scene.frame_end + 1):
+        u = min(max(((frame - scene.frame_start) / FPS - t0) / (t1 - t0), 0.0), 1.0)
+        ev.default_value = BLOOM_EV * u ** 3  # ease-in: the first stops are the visible ones
+        ev.keyframe_insert("default_value", frame=frame)
+
+    # inside the logo keep the normal picture, everywhere else the over-exposed one
+    mix = tree.nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    sockets = {s.identifier: s for s in mix.inputs}
+    tree.links.new(mask.outputs["Alpha"], sockets["Factor_Float"])
+    tree.links.new(exposure.outputs["Image"], sockets["A_Color"])
+    tree.links.new(image, sockets["B_Color"])
+    return next(s for s in mix.outputs if s.identifier == "Result_Color")
 
 
 def setup_render(portrait, preview, samples, gpu=False):
@@ -506,6 +599,9 @@ def setup_render(portrait, preview, samples, gpu=False):
     scene.cycles.samples = samples
     scene.cycles.adaptive_threshold = 0.02
     scene.cycles.use_denoising = True
+    # denoise on the graphics card too: on the CPU it can take longer than the render
+    scene.cycles.denoiser = "OPENIMAGEDENOISE"
+    scene.cycles.denoising_use_gpu = gpu
     scene.cycles.max_bounces = 8
     scene.cycles.diffuse_bounces = 4
     scene.cycles.glossy_bounces = 3
@@ -534,6 +630,7 @@ def main():
     ap.add_argument("--animate", type=float, metavar="SECONDS",
                     help="render the camera glide as numbered PNG frames; --out is the "
                          "frame prefix, e.g. renders/glide/frame_")
+    ap.add_argument("--frame", type=int, help="with --animate: render only this frame as a still")
     # inside the Blender app, our arguments come after a lone "--"
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
     args = ap.parse_args(argv)
@@ -541,11 +638,13 @@ def main():
     lib.reset_scene()
     build_architecture()
     build_furniture()
+    build_logo_wall()
     build_planting()
     build_lighting()
     build_camera(portrait=not args.landscape, seconds=args.animate or 0)
-    setup_compositor(motion_blur=bool(args.animate))
+    # render first: the compositor's pass sockets only exist once Cycles is the engine
     setup_render(not args.landscape, args.preview, 16 if args.preview else args.samples, args.gpu)
+    setup_compositor(motion_blur=bool(args.animate), bloom=bool(args.animate))
 
     if args.save:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(args.save))
@@ -553,7 +652,10 @@ def main():
     os.makedirs(os.path.dirname(out), exist_ok=True)
     scene = bpy.context.scene
     scene.render.filepath = out
-    if args.animate:
+    if args.animate and args.frame:
+        scene.frame_set(args.frame)
+        bpy.ops.render.render(write_still=True)
+    elif args.animate:
         # keep the built scene on the GPU between frames instead of re-syncing it
         scene.render.use_persistent_data = True
         # after landing every frame is identical: render the first still one, copy it

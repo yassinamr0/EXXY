@@ -1,41 +1,32 @@
 /*
- * The stage is scaled exactly like the video (object-fit: cover), so the text
- * can be placed in the video's own coordinates: the name sits on the horizon
- * inside the sea opening, the tagline and button on the floor below it.
- * Opening positions are measured from the landed frame of each render.
+ * The video ends on the logo wall bloomed to pure white, with the black logo
+ * centred. The page is that same white with the same logo in the same place,
+ * so when the video finishes nothing visibly changes; then the words appear.
+ *
+ * The stage is scaled exactly like the video (object-fit: cover), so the logo
+ * is placed in the video's own coordinates. Its size comes from the camera's
+ * stopping distance in blender/terrace.py (GLIDE_STOP, LOGO_H): the X mark is
+ * 24.0% of the frame height in portrait and 30.0% in landscape, centred.
  */
 .intro {
-  --olive: #33362a;     /* the olive trees: text */
-  --stucco: #e8dfd6;    /* the walls: light surfaces */
-  --haze: #d9d3d4;      /* the sea through the opening */
-
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: var(--stucco);
-  color: var(--olive);
+  background: #fff;
+  color: #000;
   font-family: 'Archivo', system-ui, sans-serif;
-  font-variation-settings: 'wdth' 100;
 }
 
 .intro.portrait {
   --ar-w: 9;
   --ar-h: 16;
-  --open-left: 25.9%;
-  --open-width: 48.2%;
-  --horizon: 49.2%;
-  --threshold: 68%;
-  --mark-size: 8.6cqw;
+  --mark-h: 24%;
 }
 
 .intro.landscape {
   --ar-w: 16;
   --ar-h: 9;
-  --open-left: 32.9%;
-  --open-width: 34.4%;
-  --horizon: 48.6%;
-  --threshold: 82%;
-  --mark-size: 6.1cqw;
+  --mark-h: 30%;
 }
 
 .stage {
@@ -45,7 +36,6 @@
   width: max(100vw, 100dvh * var(--ar-w) / var(--ar-h));
   aspect-ratio: var(--ar-w) / var(--ar-h);
   transform: translate(-50%, -50%);
-  container-type: inline-size;
 }
 
 .backdrop {
@@ -57,33 +47,31 @@
   display: block;
 }
 
-.wordmark {
-  --track: 0.14em;
+/* the SVG is the mark plus the ™; the mark's own centre is 37.9% across it */
+.mark {
   position: absolute;
-  left: var(--open-left);
-  width: var(--open-width);
-  bottom: calc(100% - var(--horizon) + 0.9cqw);
+  left: 50%;
+  top: 50%;
+  height: var(--mark-h);
   margin: 0;
-  text-align: center;
-  font-size: var(--mark-size);
-  font-weight: 300;
-  font-variation-settings: 'wdth' 125;
-  line-height: 1;
-  letter-spacing: var(--track);
-  /* balances the space letter-spacing adds after the last letter */
-  text-indent: var(--track);
-  white-space: nowrap;
+  transform: translate(-37.9%, -50%);
 }
 
-.floor {
+.mark img {
+  display: block;
+  height: 100%;
+  width: auto;
+}
+
+.details {
   position: absolute;
   left: 0;
   right: 0;
-  top: var(--threshold);
+  top: calc(50% + var(--mark-h) / 2 + 6%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.1rem;
+  gap: 1.25rem;
   padding: 0 24px;
   text-align: center;
 }
@@ -93,23 +81,19 @@
   max-width: 22em;
   font-size: clamp(0.95rem, 0.7rem + 0.6vw, 1.3rem);
   line-height: 1.45;
-  font-weight: 500;
+  font-weight: 450;
 }
 
-.enter {
-  display: inline-block;
-  padding: 0.95em 1.9em;
+.shop {
+  padding: 0.95em 2.2em;
+  border: 0;
   border-radius: 2px;
-  background: var(--olive);
-  color: var(--stucco);
-  font-size: clamp(0.95rem, 0.75rem + 0.45vw, 1.15rem);
-  font-weight: 500;
+  background: #000;
+  color: #fff;
+  font: 500 clamp(0.95rem, 0.75rem + 0.45vw, 1.15rem) / 1 'Archivo', system-ui, sans-serif;
   letter-spacing: 0.02em;
-  text-decoration: none;
-  transition: background-color 0.2s;
+  cursor: pointer;
 }
-
-.enter:hover { background: #22241b; }
 
 .skip {
   position: fixed;
@@ -118,15 +102,15 @@
   padding: 0.6em 1.1em;
   border: 0;
   border-radius: 2px;
-  background: rgb(232 223 214 / 0.72);
+  background: rgb(255 255 255 / 0.72);
   backdrop-filter: blur(6px);
-  color: var(--olive);
+  color: #000;
   font: 500 0.85rem/1 'Archivo', system-ui, sans-serif;
   cursor: pointer;
 }
 
-.enter:focus-visible,
+.shop:focus-visible,
 .skip:focus-visible {
-  outline: 2px solid var(--olive);
+  outline: 2px solid #000;
   outline-offset: 3px;
 }
