@@ -45,8 +45,9 @@ def build(color="#a23a2c", fabric_color="#d9ccb5"):
 
     z_top = PLATFORM_Z + CUSHION_T / 2
     parts = [frame, lib.round_cushion("Panama seat", RX - 0.03, RY - 0.03, CUSHION_T, (0, 0, z_top), cloth)]
-    parts.append(lib.cushion("Panama back", (0.72, 0.72, 0.09), at(0.4, 0.06), cloth, rotation=(0, b, 0)))
+    parts.append(lib.cushion("Panama back", (0.70, 0.70, 0.11), at(0.4, 0.07), cloth,
+                             softness=0.45, puff=0.2, rotation=(0, b, 0)))
     for y, rz in ((-0.17, 0.12), (0.19, -0.1)):
-        parts.append(lib.cushion("Panama pillow", (0.40, 0.42, 0.15), at(0.38, 0.19, y), cloth,
-                                 softness=0.45, puff=0.3, rotation=(0, b - 0.15, rz)))
+        parts.append(lib.cushion("Panama pillow", (0.34, 0.40, 0.13), at(0.36, 0.2, y), cloth,
+                                 softness=0.5, puff=0.5, rotation=(0, b - 0.15, rz)))
     return lib.assemble("Panama Sunbed", parts)

@@ -63,7 +63,7 @@ def image_node(nodes, path, colorspace, projection="BOX"):
     return node
 
 
-def textured(name, tex_id, scale, tint=None, rough_mult=1.0, saturation=1.0, value=1.0):
+def textured(name, tex_id, scale, tint=None, rough_mult=1.0, saturation=1.0, value=1.0, variation=0.0):
     """PBR material using object coordinates, so boxes need no UVs."""
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
@@ -85,6 +85,23 @@ def textured(name, tex_id, scale, tint=None, rough_mult=1.0, saturation=1.0, val
         hsv.inputs["Value"].default_value = value
         links.new(color_out, hsv.inputs["Color"])
         color_out = hsv.outputs["Color"]
+    if variation:
+        # slow, large-scale tone changes so the texture's repeat isn't visible
+        noise = nodes.new("ShaderNodeTexNoise")
+        noise.inputs["Scale"].default_value = 0.25
+        noise.inputs["Detail"].default_value = 3
+        links.new(coord.outputs["Object"], noise.inputs["Vector"])
+        rng = nodes.new("ShaderNodeMapRange")
+        rng.inputs["To Min"].default_value = 1 - variation
+        rng.inputs["To Max"].default_value = 1 + variation
+        links.new(noise.outputs["Fac"], rng.inputs["Value"])
+        vary = nodes.new("ShaderNodeMix")
+        vary.data_type = "RGBA"
+        vary.blend_type = "MULTIPLY"
+        vary.inputs["Factor"].default_value = 1.0
+        links.new(color_out, vary.inputs["A"])
+        links.new(rng.outputs["Result"], vary.inputs["B"])
+        color_out = vary.outputs["Result"]
     if tint:
         mix = nodes.new("ShaderNodeMix")
         mix.data_type = "RGBA"
@@ -171,7 +188,7 @@ def boxes_object(name, boxes, material, bevel=0.012):
 
 def build_architecture():
     stucco = textured("Stucco", "white_stucco", 0.6, tint="#fbf4ea", rough_mult=1.1)
-    paving = textured("Paving", "patio_tiles", 0.6, tint="#f8ecdb", saturation=0.5, value=1.3)
+    paving = textured("Paving", "patio_tiles", 0.6, tint="#f8ecdb", saturation=0.5, value=1.3, variation=0.12)
     length = FAR - ENTRANCE
     mid_y = (FAR + ENTRANCE) / 2
 
@@ -386,6 +403,24 @@ def use_gpu():
     return False
 
 
+def setup_compositor():
+    """Soft glow around the brightest highlights, like a real lens at sunset."""
+    scene = bpy.context.scene
+    tree = bpy.data.node_groups.new("Lens", "CompositorNodeTree")
+    tree.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+    layers = tree.nodes.new("CompositorNodeRLayers")
+    glare = tree.nodes.new("CompositorNodeGlare")
+    glare.inputs["Type"].default_value = "Fog Glow"
+    glare.inputs["Threshold"].default_value = 0.9
+    glare.inputs["Strength"].default_value = 0.35
+    glare.inputs["Size"].default_value = 0.6
+    out = tree.nodes.new("NodeGroupOutput")
+    tree.links.new(layers.outputs["Image"], glare.inputs["Image"])
+    tree.links.new(glare.outputs["Image"], out.inputs["Image"])
+    scene.compositing_node_group = tree
+    scene.render.compositor_device = "CPU"  # works on machines without a display driver
+
+
 def setup_render(portrait, preview, samples, gpu=False):
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
@@ -428,6 +463,7 @@ def main():
     build_planting()
     build_lighting()
     build_camera(portrait=not args.landscape)
+    setup_compositor()
     setup_render(not args.landscape, args.preview, 16 if args.preview else args.samples, args.gpu)
 
     if args.save:
