@@ -52,11 +52,12 @@ SUN_COLOR = (1.0, 0.66, 0.40)
 # wall fills the whole frame, so the video hands over to a white web page.
 WALL_Y = 4.8                 # face of the logo wall (towards the camera)
 WALL_W, WALL_H, WALL_T = 3.0, 3.0, 0.2
-LOGO_H = 0.42                # height of the X mark on the wall (m)
+LOGO_H = 0.32                # height of the X mark on the wall (m)
 LOGO_Z = 1.45                # height of the mark's centre = the camera's final height
 CAMERA = {"location": (0, -9.8, 1.5), "target": (0, WALL_Y, LOGO_Z)}
-# --animate: the camera stops this far from the wall (portrait, landscape),
-# framing the mark at ~40% of the phone's width / ~30% of the desktop's height
+# --animate: the camera stops this far from the wall (portrait, landscape); the
+# mark ends up 18.3% of the frame height on phones and 22.8% on desktop
+# (web/src/intro.css --mark-h must match)
 GLIDE_STOP = {True: 0.93, False: 1.66}
 # During the rush the picture over-exposes until the wall clips to pure white
 # (the web page's white); the logo is masked out and stays black.

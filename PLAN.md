@@ -61,7 +61,7 @@ followed by a clean, premium site experience.
   - [x] 1b. Realistic still in Blender Cycles (`blender/terrace.py`) — portrait + landscape rendered on GPU
   - [x] 2a. Camera glide video: `--animate 3.25` + `blender/encode.py`. Exponential build-up with lens widening, near-instant rush peaking at 2.4 s, hard landing at 2.6 s, hold to 3.25 s. Hold frames rendered once and copied; motion blur done in the compositor (vector blur), much cheaper than Cycles motion blur.
   - [x] 2. Camera glide + Skip button (`web/src/Intro.jsx`)
-  - [x] 3. Wordmark + button reveal: name on the horizon inside the sea opening, tagline + "Explore the collection" on the floor. Placeholder wordmark (Archivo Expanded) until a real logo is chosen.
+  - [x] 3. Logo ending: the glide rushes at a freestanding white wall with the real EXXY logo (rebuilt as vector, `blender/logo.py`), blooms to pure white, and hands over invisibly to the white page with the same logo; then the tagline and a "Shop now" button (not connected yet) appear.
   - [ ] 4. Polish: baked lighting, bistro table + sunbed, mobile/desktop framing
 
 ## Completed
