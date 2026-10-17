@@ -10,7 +10,8 @@ followed by a clean, premium site experience.
 - Categories: Chairs, Lounge Sets, Sunbeds & Loungers, Tables.
 - Products are mostly aluminium / metal with powder coating, named by code (e.g. EX-DT-01, EX-TA-05).
 - Prices in EGP; several items sold out, some listed at LE 0.00.
-- Site: exxyshop.com, very likely Shopify (not yet confirmed — the site is blocked from the cloud environment).
+- Site: exxyshop.com — **confirmed Shopify** (default Dawn theme). 34 products, all priced LE 0.00 → sales happen by inquiry.
+- Real projects are **hospitality** (cafés/restaurants). Full audit: `docs/site-audit.md`.
 
 ## Decisions made
 | # | Decision | Why |
@@ -27,8 +28,10 @@ followed by a clean, premium site experience.
 
 ## Open questions
 - Is the 3D scene **only the intro**, or also a browsable showroom? (Deferred — intro first; build it so it can grow.)
-- Photos: only the public site photos for now. Need them in the repo (site is blocked from the cloud environment).
-- Which 3–5 pieces go in the scene?
+- Photos: only the public site photos (downloaded and reviewed).
+- Many product photos look like European brand catalogue shots — ask EXXY about their own production photos.
+- EXXY has no image logo — demo needs a wordmark (placeholder until they supply one?).
+- Which 3–5 pieces go in the scene? (Proposal: EX-DT-01, LINES, EX-TA-05, Panama Sunbed.)
 - No deadline.
 - How do customers really order (online, WhatsApp/phone, projects)? Ask EXXY during the pitch.
 - Confirm platform (Shopify?) once exxyshop.com is reachable.
@@ -47,7 +50,7 @@ followed by a clean, premium site experience.
 - Test on a real phone at every milestone.
 
 ## Phases
-- [x] A. Initial look at the current site (via search; full inspection pending network access)
+- [x] A. Site audit (`docs/site-audit.md`)
 - [ ] B. Design direction for the terrace intro and site style
 - [ ] C. 3D test: convert 2–3 products, compare with photos
 - [ ] D. Demo site structure (above)
@@ -56,3 +59,4 @@ followed by a clean, premium site experience.
 ## Completed
 - Repo created (empty).
 - Public research on EXXY's site and products.
+- Full site audit: platform, catalogue, projects, photos.
