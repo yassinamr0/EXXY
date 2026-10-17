@@ -130,20 +130,18 @@ def sea_material():
 
 def wood_material():
     """Pale limed timber for the pergola: warmer than plaster, still quiet."""
-    mat = bpy.data.materials.new("Pergola oak")
+    mat = bpy.data.materials.new("Pergola timber")
     mat.use_nodes = True
     nt = mat.node_tree
     bsdf = nt.nodes["Principled BSDF"]
-    wave = nt.nodes.new("ShaderNodeTexWave")
-    wave.bands_direction = "X"
-    wave.inputs["Scale"].default_value = 6
-    wave.inputs["Distortion"].default_value = 6
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 40
     ramp = nt.nodes.new("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].color = lib.hex_to_linear("#cdbba3")
-    ramp.color_ramp.elements[1].color = lib.hex_to_linear("#e2d5c2")
-    nt.links.new(wave.outputs["Fac"], ramp.inputs["Fac"])
+    ramp.color_ramp.elements[0].color = lib.hex_to_linear("#cfc0aa")
+    ramp.color_ramp.elements[1].color = lib.hex_to_linear("#ddd0bd")
+    nt.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
     nt.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
-    bsdf.inputs["Roughness"].default_value = 0.7
+    bsdf.inputs["Roughness"].default_value = 0.8
     return mat
 
 
@@ -181,7 +179,8 @@ def build_architecture():
     piers = []
     y = ENTRANCE + 1.2
     while y < FAR:
-        piers.append(((-HW - 0.22, y, H / 2), (0.45, 0.5, H)))
+        # piers stop under the beam so no faces overlap (that renders black)
+        piers.append(((-HW - 0.22, y, (H - 0.5) / 2), (0.45, 0.5, H - 0.5)))
         y += 2.6
     piers.append(((-HW - 0.22, mid_y, H - 0.25), (0.45, length, 0.5)))
     boxes_object("Colonnade", piers, stucco)
