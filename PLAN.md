@@ -26,6 +26,8 @@ followed by a clean, premium site experience.
 | 8 | Furniture modelled mainly by **Claude Code writing Blender Python scripts** from photos + listed dimensions; free AI image-to-3D only for comparison / cushions | EXXY's pieces are simple metal frames — scripted models are accurate, light and free |
 | 9 | Tech for the demo: **Vite + React Three Fiber + GSAP** (no Next.js yet) | One page doesn't need Next.js; components move over later |
 | 10 | Lighting: **golden hour** — low warm sun, long soft shadows, warm-glowing white walls | Most cinematic and premium |
+| 12 | **Intro = pre-rendered cinematic video** (Blender Cycles, path-traced) with the wordmark + button as real HTML on top — replaces live real-time 3D | Real-time 3D on phones looked game-like ("Roblox"); the camera path is fixed, so a video gives photoreal light on every phone |
+| 13 | Free CC0 assets from **Poly Haven** (stucco, stone paving, sunrise-over-sea sky, olive trees, pots, vases) | Realism without cost; commercial use allowed |
 | 11 | Project skills installed in `.claude/skills/`: find-skills, frontend-design, gsap-core/timeline/performance, web-design-guidelines | Official sources; saved in the repo so every session has them |
 
 ## Open questions
@@ -44,11 +46,9 @@ followed by a clean, premium site experience.
 - Skip button, reduced-motion support, still-image fallback for weak devices.
 
 ## Mobile performance rules
-- Compose the shot for **portrait first**, then adapt for landscape/desktop.
-- **Bake lighting and shadows in Blender** into textures (realistic look, almost free at runtime).
-- Total download target **under ~5 MB**; compressed meshes (meshopt/Draco) and textures (KTX2/WebP).
-- No real-time shadows or heavy post-processing on phones; cap pixel ratio.
-- Show a poster image instantly while the 3D loads.
+- Compose the shot for **portrait first**, then a separate landscape render for desktop.
+- Video target: ~5 s, H.264 MP4 (+ WebM), **under ~4 MB** per version; first frame as a poster image that shows instantly.
+- The web page only plays a video and animates HTML text — smooth on any phone.
 - Test on a real phone at every milestone.
 
 ## Phases
@@ -57,7 +57,8 @@ followed by a clean, premium site experience.
 - [x] C. 3D test: EX-DT-01 table + LINES chair scripted in Blender (`blender/`), 26 KB + 63 KB GLB — close match to photos (`docs/3d-test/`)
 - [ ] D. Demo site structure (above)
 - [ ] E. Build the intro
-  - [x] 1. Scene setup (terrace, light, first furniture)
+  - [x] 1. Scene setup (real-time version — rejected as game-like)
+  - [ ] 1b. Realistic still in Blender Cycles (`blender/terrace.py`)
   - [ ] 2. Camera glide + Skip button
   - [ ] 3. Wordmark + button reveal
   - [ ] 4. Polish: baked lighting, bistro table + sunbed, mobile/desktop framing
