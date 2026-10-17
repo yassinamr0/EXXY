@@ -5,6 +5,7 @@ import Intro from './Intro.jsx'
 // It is loaded lazily so visitors to the intro never download three.js.
 const RealtimeTerrace = lazy(() => import('./scene/RealtimeTerrace.jsx'))
 const realtime = new URLSearchParams(location.search).has('realtime')
+if (realtime) document.documentElement.classList.add('realtime')
 
 export default function App() {
   if (!realtime) return <Intro />

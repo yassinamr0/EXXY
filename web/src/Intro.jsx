@@ -15,8 +15,70 @@ const STALL_MS = 4000
 const portraitQuery = matchMedia('(max-aspect-ratio: 1/1)')
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 const saveData = navigator.connection?.saveData === true
-// ?debug shows why the intro skipped to the page (for testing on real phones)
+// ?debug shows why the intro skipped to the page, and the screen measurements
 const debug = new URLSearchParams(location.search).has('debug')
+
+// Edge to edge on iPhone. Safari on iOS 26 never draws pinned (position: fixed)
+// content behind the status bar or the floating toolbar; it paints a flat colour
+// there instead (the white bands). Ordinary page content does show through both
+// bars, so the intro is a normal block, taller than the screen by a "runway"
+// above and below, and the page starts scrolled down by the top runway: then the
+// status bar sits over the top runway and the toolbar over the bottom one.
+// (?bleed forces this layout in any browser, for testing the maths on a desktop)
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+  new URLSearchParams(location.search).has('bleed')
+const RUNWAY_TOP = isIOS ? 120 : 0
+const RUNWAY_BOTTOM = isIOS ? 220 : 0
+// the split of the hidden strips between status bar and toolbar is unknown, so
+// the picture covers the physical screen plus this margin
+const COVER_MARGIN = isIOS ? 40 : 0
+
+/**
+ * Sizes the page for full-bleed (see RUNWAY_TOP) and starts it scrolled to the
+ * runway. If the browser won't scroll there, the top runway is dropped so the
+ * picture still lines up (the worst case is a plain strip behind the clock).
+ */
+function useFullBleed(orientation) {
+  const [measured, setMeasured] = useState('')
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
+    const apply = () => {
+      const vh = window.innerHeight
+      // iOS reports screen.width/height in portrait terms whatever the rotation
+      const [short, long] = [screen.width, screen.height].sort((a, b) => a - b)
+      const physical = isIOS ? (orientation === 'portrait' ? long : short) : vh
+      let top = RUNWAY_TOP
+      root.style.setProperty('--vh', `${vh}px`)
+      root.style.setProperty('--runway-top', `${top}px`)
+      root.style.setProperty('--runway-bottom', `${RUNWAY_BOTTOM}px`)
+      root.style.setProperty('--cover-h', `${Math.max(vh, physical) + COVER_MARGIN}px`)
+      window.scrollTo(0, top)
+      if (top && Math.abs(window.scrollY - top) > 2) {
+        top = 0
+        root.style.setProperty('--runway-top', '0px')
+        window.scrollTo(0, 0)
+      }
+      setMeasured(`view ${vh} · screen ${physical} · runway ${top} · scrolled ${Math.round(window.scrollY)}`)
+    }
+    apply()
+    window.addEventListener('resize', apply)
+    return () => window.removeEventListener('resize', apply)
+  }, [orientation])
+
+  // one screen, nothing to scroll: keep swipes from dragging the runway into view
+  useEffect(() => {
+    const block = (e) => e.preventDefault()
+    window.addEventListener('touchmove', block, { passive: false })
+    window.addEventListener('wheel', block, { passive: false })
+    return () => {
+      window.removeEventListener('touchmove', block)
+      window.removeEventListener('wheel', block)
+    }
+  }, [])
+  return measured
+}
 
 function useOrientation() {
   const [portrait, setPortrait] = useState(portraitQuery.matches)
@@ -30,6 +92,7 @@ function useOrientation() {
 
 export default function Intro() {
   const orientation = useOrientation()
+  const measured = useFullBleed(orientation)
   // the video is picked once, for the screen shape at load
   const [videoOrientation] = useState(orientation)
   const [landed, setLanded] = useState(reducedMotion || saveData)
@@ -84,11 +147,6 @@ export default function Intro() {
     return () => ctx.revert()
   }, [landed])
 
-  const skip = () => {
-    video.current?.pause()
-    finish('skip pressed')
-  }
-
   return (
     <main className={`intro ${orientation}`}>
       <div className="stage" ref={stage}>
@@ -120,13 +178,7 @@ export default function Intro() {
         )}
       </div>
 
-      {debug && <output className="debug">{why}</output>}
-
-      {!landed && (
-        <button type="button" className="skip" onClick={skip}>
-          Skip intro
-        </button>
-      )}
+      {debug && <output className="debug">{why}<br />{measured}</output>}
     </main>
   )
 }

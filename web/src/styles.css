@@ -7,8 +7,16 @@
 
 * { box-sizing: border-box; }
 
-html, body, #root {
-  margin: 0;
+html, body { margin: 0; }
+
+/* the intro page is white; it may be taller than the screen (see Intro.jsx) */
+html {
+  background: #fff;
+  overscroll-behavior: none;
+}
+
+/* the old real-time 3D scene (?realtime) is locked to exactly one screen */
+html.realtime, html.realtime body, html.realtime #root {
   height: 100%;
   overflow: hidden;
   background: var(--plaster);
