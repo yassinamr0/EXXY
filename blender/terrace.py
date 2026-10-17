@@ -1,6 +1,8 @@
 """Build the EXXY terrace in Blender and render it with Cycles (path tracing).
 
-Usage (from the repo root, after `python blender/fetch_assets.py`):
+Usage (from the repo root, after `python blender/fetch_assets.py`).
+With the Blender app instead of the bpy package, use
+`blender --background --python blender/terrace.py -- --gpu --out renders/still.png`.
     python blender/terrace.py --out renders/still.png             # final still
     python blender/terrace.py --out renders/test.png --preview    # fast low-res check
     python blender/terrace.py --save renders/terrace.blend        # also keep the .blend
@@ -365,10 +367,29 @@ def build_camera(portrait=True):
     return cam
 
 
-def setup_render(portrait, preview, samples):
+def use_gpu():
+    """Render on an NVIDIA card: OptiX (RTX cards) if available, else CUDA."""
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    for backend in ("OPTIX", "CUDA"):
+        try:
+            prefs.compute_device_type = backend
+        except TypeError:
+            continue
+        prefs.get_devices()
+        gpus = [d for d in prefs.devices if d.type == backend]
+        if gpus:
+            for d in prefs.devices:
+                d.use = d.type == backend
+            print(f"Rendering on {backend}: {', '.join(d.name for d in gpus)}")
+            return True
+    print("No NVIDIA GPU found, rendering on the CPU")
+    return False
+
+
+def setup_render(portrait, preview, samples, gpu=False):
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
+    scene.cycles.device = "GPU" if gpu and use_gpu() else "CPU"
     scene.cycles.samples = samples
     scene.cycles.adaptive_threshold = 0.02
     scene.cycles.use_denoising = True
@@ -396,7 +417,10 @@ def main():
     ap.add_argument("--preview", action="store_true", help="40%% resolution, few samples")
     ap.add_argument("--samples", type=int, default=96)
     ap.add_argument("--save", help="also save the .blend here")
-    args = ap.parse_args()
+    ap.add_argument("--gpu", action="store_true", help="render on an NVIDIA graphics card")
+    # inside the Blender app, our arguments come after a lone "--"
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
+    args = ap.parse_args(argv)
 
     lib.reset_scene()
     build_architecture()
@@ -404,7 +428,7 @@ def main():
     build_planting()
     build_lighting()
     build_camera(portrait=not args.landscape)
-    setup_render(not args.landscape, args.preview, 16 if args.preview else args.samples)
+    setup_render(not args.landscape, args.preview, 16 if args.preview else args.samples, args.gpu)
 
     if args.save:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(args.save))
