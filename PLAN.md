@@ -30,7 +30,7 @@ followed by a clean, premium site experience.
 - Is the 3D scene **only the intro**, or also a browsable showroom? (Deferred — intro first; build it so it can grow.)
 - Photos: only the public site photos (downloaded and reviewed).
 - Many product photos look like European brand catalogue shots — ask EXXY about their own production photos.
-- EXXY has no image logo — demo needs a wordmark (placeholder until they supply one?).
+- EXXY has no image logo — demo uses a placeholder wordmark (Instagram skipped).
 - Which 3–5 pieces go in the scene? (Proposal: EX-DT-01, LINES, EX-TA-05, Panama Sunbed.)
 - No deadline.
 - How do customers really order (online, WhatsApp/phone, projects)? Ask EXXY during the pitch.
@@ -52,7 +52,7 @@ followed by a clean, premium site experience.
 ## Phases
 - [x] A. Site audit (`docs/site-audit.md`)
 - [ ] B. Design direction for the terrace intro and site style
-- [ ] C. 3D test: convert 2–3 products, compare with photos
+- [x] C. 3D test: EX-DT-01 table + LINES chair scripted in Blender (`blender/`), 26 KB + 63 KB GLB — close match to photos (`docs/3d-test/`)
 - [ ] D. Demo site structure (above)
 - [ ] E. Build: proof of concept (scene + camera) → demo pages → deploy private link
 
@@ -60,3 +60,4 @@ followed by a clean, premium site experience.
 - Repo created (empty).
 - Public research on EXXY's site and products.
 - Full site audit: platform, catalogue, projects, photos.
+- Blender scripting pipeline (`blender/build.py`) + first two models in `assets/models/`.
