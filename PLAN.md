@@ -25,6 +25,8 @@ followed by a clean, premium site experience.
 | 7 | **Mobile-first**: portrait phone is the main target, desktop must also look great | Most viewers will be on phones |
 | 8 | Furniture modelled mainly by **Claude Code writing Blender Python scripts** from photos + listed dimensions; free AI image-to-3D only for comparison / cushions | EXXY's pieces are simple metal frames — scripted models are accurate, light and free |
 | 9 | Tech for the demo: **Vite + React Three Fiber + GSAP** (no Next.js yet) | One page doesn't need Next.js; components move over later |
+| 10 | Lighting: **golden hour** — low warm sun, long soft shadows, warm-glowing white walls | Most cinematic and premium |
+| 11 | Project skills installed in `.claude/skills/`: find-skills, frontend-design, gsap-core/timeline/performance, web-design-guidelines | Official sources; saved in the repo so every session has them |
 
 ## Open questions
 - Is the 3D scene **only the intro**, or also a browsable showroom? (Deferred — intro first; build it so it can grow.)
