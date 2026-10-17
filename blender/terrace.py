@@ -6,6 +6,7 @@ With the Blender app instead of the bpy package, use
     python blender/terrace.py --out renders/still.png             # final still
     python blender/terrace.py --out renders/test.png --preview    # fast low-res check
     python blender/terrace.py --save renders/terrace.blend        # also keep the .blend
+    python blender/terrace.py --animate 5 --out renders/glide/frame_  # camera glide frames
 
 Coordinates: metres, Z up. The visitor enters at -Y and looks towards +Y,
 where the far wall frames the sea.
@@ -45,6 +46,14 @@ BALCONY = 2.5       # floor beyond the far wall
 SUN_FROM = Vector((-7, 9, 4.0))    # low sun: ahead and to the left
 SUN_COLOR = (1.0, 0.66, 0.40)
 CAMERA = {"location": (0, -9.8, 1.5), "target": (0, 9, 1.35)}
+GLIDE_END = (0, 3.0, 1.45)   # --animate: the camera stops here, the opening framed ahead
+# Glide timing: speed grows exponentially (x GLIDE_RAMP from start to peak) so the
+# build-up is felt all the way, peaks at GLIDE_PEAK s, brakes hard to land at
+# GLIDE_LAND s, then holds still for the wordmark. The lens widens with speed.
+GLIDE_PEAK, GLIDE_LAND = 2.4, 2.6
+GLIDE_RAMP = 60.0
+GLIDE_FOV_KICK = 0.3          # lens is 30% wider (shorter) at top speed
+FPS = 24
 
 # Showroom layout. The walkway (|x| < 0.9) stays clear; pieces sit in four
 # bays along both sides. Colours are from EXXY's own option lists.
@@ -368,7 +377,8 @@ def build_lighting():
     sun.rotation_euler = SUN_FROM.to_track_quat("Z", "Y").to_euler()
 
 
-def build_camera(portrait=True):
+def build_camera(portrait=True, seconds=0):
+    """Still camera at the entrance; with `seconds`, a glide down the walkway."""
     cam_data = bpy.data.cameras.new("Camera")
     cam_data.sensor_fit = "HORIZONTAL"
     cam_data.lens = 34 if portrait else 24
@@ -381,7 +391,62 @@ def build_camera(portrait=True):
     direction = Vector(CAMERA["target"]) - Vector(CAMERA["location"])
     cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
     bpy.context.scene.camera = cam
+    if seconds:
+        animate_glide(cam, seconds)
     return cam
+
+
+def animate_glide(cam, seconds):
+    """Glide the camera from the entrance to GLIDE_END, always aimed (and focused)
+    at the sea opening, accelerating the whole way (ease-in), with motion blur."""
+    scene = bpy.context.scene
+    scene.render.fps = FPS
+    scene.frame_start, scene.frame_end = 1, round(seconds * FPS)
+    scene.render.use_motion_blur = True
+    scene.render.motion_blur_shutter = 0.5
+    target = bpy.data.objects.new("CameraTarget", None)
+    target.location = CAMERA["target"]
+    bpy.context.collection.objects.link(target)
+    track = cam.constraints.new("TRACK_TO")
+    track.target = target
+    track.track_axis, track.up_axis = "TRACK_NEGATIVE_Z", "UP_Y"
+    cam.data.dof.focus_object = target
+    # a key on every frame pins the timing curve exactly, whatever the interpolation
+    start, end = Vector(CAMERA["location"]), Vector(GLIDE_END)
+    lens = cam.data.lens
+    progress, speed = glide_curve(scene.frame_end - scene.frame_start + 1)
+    for i, (p, v) in enumerate(zip(progress, speed)):
+        frame = scene.frame_start + i
+        cam.location = start.lerp(end, p)
+        cam.keyframe_insert("location", frame=frame)
+        cam.data.lens = lens * (1 - GLIDE_FOV_KICK * v)
+        cam.data.keyframe_insert("lens", frame=frame)
+    print("glide progress per 0.5 s:",
+          " ".join(f"{progress[min(round(s * FPS), len(progress) - 1)]:.2f}"
+                   for s in (0.5, 1, 1.5, 2, 2.2, 2.4, 2.6)))
+
+
+def glide_speed(t):
+    """Relative camera speed at t seconds: exponential build-up, cosine brake."""
+    if t <= GLIDE_PEAK:
+        return GLIDE_RAMP ** (t / GLIDE_PEAK)
+    if t < GLIDE_LAND:
+        return GLIDE_RAMP * 0.5 * (1 + math.cos(math.pi * (t - GLIDE_PEAK) / (GLIDE_LAND - GLIDE_PEAK)))
+    return 0.0
+
+
+def glide_curve(frames, steps=40):
+    """Per frame: fraction of the walkway covered (0..1) and speed relative to the peak."""
+    dt = 1 / (FPS * steps)
+    total, covered = 0.0, []
+    for i in range(frames * steps):
+        if i % steps == 0:
+            covered.append(total)
+        total += glide_speed(i * dt) * dt
+    end = sum(glide_speed(i * dt) * dt for i in range(round(GLIDE_LAND / dt) + 1))
+    progress = [min(c / end, 1.0) for c in covered]
+    speed = [glide_speed(f / FPS) / GLIDE_RAMP for f in range(frames)]
+    return progress, speed
 
 
 def use_gpu():
@@ -453,6 +518,9 @@ def main():
     ap.add_argument("--samples", type=int, default=96)
     ap.add_argument("--save", help="also save the .blend here")
     ap.add_argument("--gpu", action="store_true", help="render on an NVIDIA graphics card")
+    ap.add_argument("--animate", type=float, metavar="SECONDS",
+                    help="render the camera glide as numbered PNG frames; --out is the "
+                         "frame prefix, e.g. renders/glide/frame_")
     # inside the Blender app, our arguments come after a lone "--"
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
     args = ap.parse_args(argv)
@@ -462,7 +530,7 @@ def main():
     build_furniture()
     build_planting()
     build_lighting()
-    build_camera(portrait=not args.landscape)
+    build_camera(portrait=not args.landscape, seconds=args.animate or 0)
     setup_compositor()
     setup_render(not args.landscape, args.preview, 16 if args.preview else args.samples, args.gpu)
 
@@ -471,7 +539,12 @@ def main():
     out = os.path.abspath(args.out)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     bpy.context.scene.render.filepath = out
-    bpy.ops.render.render(write_still=True)
+    if args.animate:
+        # keep the built scene on the GPU between frames instead of re-syncing it
+        bpy.context.scene.render.use_persistent_data = True
+        bpy.ops.render.render(animation=True)
+    else:
+        bpy.ops.render.render(write_still=True)
     print("saved", out)
 
 

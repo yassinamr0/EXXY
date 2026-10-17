@@ -58,7 +58,8 @@ followed by a clean, premium site experience.
 - [ ] D. Demo site structure (above)
 - [ ] E. Build the intro
   - [x] 1. Scene setup (real-time version — rejected as game-like)
-  - [ ] 1b. Realistic still in Blender Cycles (`blender/terrace.py`)
+  - [x] 1b. Realistic still in Blender Cycles (`blender/terrace.py`) — portrait + landscape rendered on GPU
+  - [ ] 2a. Camera glide video: `--animate 3.25` + `blender/encode.py`. Motion signed off: exponential build-up with lens widening, near-instant rush peaking at 2.4 s, hard landing at 2.6 s, hold to 3.25 s for the wordmark. Full-quality portrait render next, then landscape.
   - [ ] 2. Camera glide + Skip button
   - [ ] 3. Wordmark + button reveal
   - [ ] 4. Polish: baked lighting, bistro table + sunbed, mobile/desktop framing
