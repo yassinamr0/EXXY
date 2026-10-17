@@ -15,6 +15,8 @@ const STALL_MS = 4000
 const portraitQuery = matchMedia('(max-aspect-ratio: 1/1)')
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 const saveData = navigator.connection?.saveData === true
+// ?debug shows why the intro skipped to the page (for testing on real phones)
+const debug = new URLSearchParams(location.search).has('debug')
 
 function useOrientation() {
   const [portrait, setPortrait] = useState(portraitQuery.matches)
@@ -32,10 +34,13 @@ export default function Intro() {
   const [videoOrientation] = useState(orientation)
   const [landed, setLanded] = useState(reducedMotion || saveData)
   const [videoDone, setVideoDone] = useState(reducedMotion || saveData)
+  const [why, setWhy] = useState(
+    reducedMotion ? 'reduce motion is on' : saveData ? 'data saver is on' : 'playing')
   const video = useRef(null)
   const stage = useRef(null)
 
-  const finish = () => {
+  const finish = (reason) => {
+    setWhy((current) => (current === 'playing' ? reason : current))
     setLanded(true)
     setVideoDone(true)
   }
@@ -49,19 +54,25 @@ export default function Intro() {
       if (v.currentTime >= LAND_AT) return setLanded(true)
       frame = requestAnimationFrame(watch)
     }
-    v.play().then(watch, finish)
-    const stall = setTimeout(() => v.currentTime < 0.1 && finish(), STALL_MS)
-    v.addEventListener('error', finish)
+    // phones only autoplay video that is muted as an attribute, not just a property
+    v.muted = v.defaultMuted = true
+    v.setAttribute('muted', '')
+    v.play().then(watch, (e) => finish(`play() refused: ${e.name}`))
+    const stall = setTimeout(
+      () => v.currentTime < 0.1 && finish(`no frame after ${STALL_MS / 1000}s (readyState ${v.readyState})`),
+      STALL_MS)
+    const failed = () => finish(`video error ${v.error?.code}`)
+    v.addEventListener('error', failed)
     return () => {
       cancelAnimationFrame(frame)
       clearTimeout(stall)
-      v.removeEventListener('error', finish)
+      v.removeEventListener('error', failed)
     }
   }, [])
 
   // turning the phone mid-intro skips to the page, laid out for the new shape
   useEffect(() => {
-    if (orientation !== videoOrientation) finish()
+    if (orientation !== videoOrientation) finish('screen rotated')
   }, [orientation, videoOrientation])
 
   // the page's only motion: the words and button appear once the screen is white
@@ -75,7 +86,7 @@ export default function Intro() {
 
   const skip = () => {
     video.current?.pause()
-    finish()
+    finish('skip pressed')
   }
 
   return (
@@ -108,6 +119,8 @@ export default function Intro() {
           </div>
         )}
       </div>
+
+      {debug && <output className="debug">{why}</output>}
 
       {!landed && (
         <button type="button" className="skip" onClick={skip}>
