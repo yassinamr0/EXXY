@@ -14,6 +14,7 @@ where the far wall frames the sea.
 import argparse
 import math
 import os
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -398,12 +399,11 @@ def build_camera(portrait=True, seconds=0):
 
 def animate_glide(cam, seconds):
     """Glide the camera from the entrance to GLIDE_END, always aimed (and focused)
-    at the sea opening, accelerating the whole way (ease-in), with motion blur."""
+    at the sea opening, accelerating the whole way. Motion blur is added in the
+    compositor (see setup_compositor), which is far cheaper than Cycles' own."""
     scene = bpy.context.scene
     scene.render.fps = FPS
     scene.frame_start, scene.frame_end = 1, round(seconds * FPS)
-    scene.render.use_motion_blur = True
-    scene.render.motion_blur_shutter = 0.5
     target = bpy.data.objects.new("CameraTarget", None)
     target.location = CAMERA["target"]
     bpy.context.collection.objects.link(target)
@@ -468,19 +468,32 @@ def use_gpu():
     return False
 
 
-def setup_compositor():
-    """Soft glow around the brightest highlights, like a real lens at sunset."""
+def setup_compositor(motion_blur=False):
+    """Soft glow around the brightest highlights, like a real lens at sunset.
+    With `motion_blur`, smear each frame along the render's speed pass first:
+    a fraction of the cost of path-traced motion blur, near-identical here."""
     scene = bpy.context.scene
     tree = bpy.data.node_groups.new("Lens", "CompositorNodeTree")
     tree.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
     layers = tree.nodes.new("CompositorNodeRLayers")
+    image = layers.outputs["Image"]
+    if motion_blur:
+        view_layer = scene.view_layers[0]
+        view_layer.use_pass_vector = view_layer.use_pass_z = True
+        blur = tree.nodes.new("CompositorNodeVecBlur")
+        blur.inputs["Samples"].default_value = 64
+        blur.inputs["Shutter"].default_value = 0.5
+        tree.links.new(image, blur.inputs["Image"])
+        tree.links.new(layers.outputs["Vector"], blur.inputs["Speed"])
+        tree.links.new(layers.outputs["Depth"], blur.inputs["Depth"])
+        image = blur.outputs["Image"]
     glare = tree.nodes.new("CompositorNodeGlare")
     glare.inputs["Type"].default_value = "Fog Glow"
     glare.inputs["Threshold"].default_value = 0.9
     glare.inputs["Strength"].default_value = 0.35
     glare.inputs["Size"].default_value = 0.6
     out = tree.nodes.new("NodeGroupOutput")
-    tree.links.new(layers.outputs["Image"], glare.inputs["Image"])
+    tree.links.new(image, glare.inputs["Image"])
     tree.links.new(glare.outputs["Image"], out.inputs["Image"])
     scene.compositing_node_group = tree
     scene.render.compositor_device = "CPU"  # works on machines without a display driver
@@ -531,18 +544,26 @@ def main():
     build_planting()
     build_lighting()
     build_camera(portrait=not args.landscape, seconds=args.animate or 0)
-    setup_compositor()
+    setup_compositor(motion_blur=bool(args.animate))
     setup_render(not args.landscape, args.preview, 16 if args.preview else args.samples, args.gpu)
 
     if args.save:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(args.save))
     out = os.path.abspath(args.out)
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    bpy.context.scene.render.filepath = out
+    scene = bpy.context.scene
+    scene.render.filepath = out
     if args.animate:
         # keep the built scene on the GPU between frames instead of re-syncing it
-        bpy.context.scene.render.use_persistent_data = True
+        scene.render.use_persistent_data = True
+        # after landing every frame is identical: render the first still one, copy it
+        last = scene.frame_end
+        held = min(last, scene.frame_start + math.ceil(GLIDE_LAND * FPS) + 1)
+        scene.frame_end = held
         bpy.ops.render.render(animation=True)
+        for frame in range(held + 1, last + 1):
+            shutil.copyfile(scene.render.frame_path(frame=held), scene.render.frame_path(frame=frame))
+        scene.frame_end = last
     else:
         bpy.ops.render.render(write_still=True)
     print("saved", out)

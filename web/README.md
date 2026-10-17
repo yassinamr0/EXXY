@@ -1,14 +1,25 @@
 # EXXY intro — web app
 
-Vite + React Three Fiber + GSAP.
+Vite + React + GSAP. The intro is a pre-rendered video (Blender Cycles) with
+the EXXY name, tagline and button as real HTML on top.
 
 ```bash
 npm install
-npm run dev            # local dev server (add ?orbit to the URL to look around freely)
+npm run dev            # local dev server (?realtime shows the old real-time 3D scene, ?realtime&orbit to look around)
 npm run build          # normal production build -> dist/
 npm run build:single   # one self-contained file for the private preview -> dist-single/artifact.html
 ```
 
+- `src/Intro.jsx` + `src/intro.css`: the intro page. Text is placed in the video's own
+  coordinates (the name sits on the horizon inside the sea opening); the opening
+  positions in `intro.css` are measured from the landed frame of each render.
+- `public/intro/`: `portrait|landscape.mp4` plus `-start.jpg` (poster) and `-end.jpg`
+  (landed view, used for reduced motion, Skip and slow connections). Made with
+  `blender/terrace.py --animate 3.25` then `blender/encode.py ... --stills`.
+
+Old real-time scene (kept for comparison, `?realtime`):
+
+- `src/scene/RealtimeTerrace.jsx`: the canvas, camera and lights.
 - `src/scene/layout.js`: every position, size, colour and the sun direction in one place.
 - `src/scene/Terrace.jsx`: the architecture (floor, walls, pergola, sky, sea).
 - `src/scene/Furniture.jsx`: places and recolours the EXXY models.

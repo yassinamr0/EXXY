@@ -59,9 +59,9 @@ followed by a clean, premium site experience.
 - [ ] E. Build the intro
   - [x] 1. Scene setup (real-time version — rejected as game-like)
   - [x] 1b. Realistic still in Blender Cycles (`blender/terrace.py`) — portrait + landscape rendered on GPU
-  - [ ] 2a. Camera glide video: `--animate 3.25` + `blender/encode.py`. Motion signed off: exponential build-up with lens widening, near-instant rush peaking at 2.4 s, hard landing at 2.6 s, hold to 3.25 s for the wordmark. Full-quality portrait render next, then landscape.
-  - [ ] 2. Camera glide + Skip button
-  - [ ] 3. Wordmark + button reveal
+  - [x] 2a. Camera glide video: `--animate 3.25` + `blender/encode.py`. Exponential build-up with lens widening, near-instant rush peaking at 2.4 s, hard landing at 2.6 s, hold to 3.25 s. Hold frames rendered once and copied; motion blur done in the compositor (vector blur), much cheaper than Cycles motion blur.
+  - [x] 2. Camera glide + Skip button (`web/src/Intro.jsx`)
+  - [x] 3. Wordmark + button reveal: name on the horizon inside the sea opening, tagline + "Explore the collection" on the floor. Placeholder wordmark (Archivo Expanded) until a real logo is chosen.
   - [ ] 4. Polish: baked lighting, bistro table + sunbed, mobile/desktop framing
 
 ## Completed
