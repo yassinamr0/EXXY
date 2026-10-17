@@ -20,7 +20,7 @@ from mathutils import Vector  # noqa: E402
 
 import lib  # noqa: E402
 
-OUT_DIR = os.path.join(HERE, "..", "assets", "models")
+OUT_DIR = os.path.join(HERE, "..", "web", "src", "models")
 
 
 def render_preview(obj, filepath, yaw=-35, pitch=12, size=(900, 700)):

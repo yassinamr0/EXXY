@@ -2,3 +2,6 @@
 __pycache__/
 previews/
 reference/
+node_modules/
+dist/
+dist-single/

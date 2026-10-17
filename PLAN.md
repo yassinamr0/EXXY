@@ -56,10 +56,15 @@ followed by a clean, premium site experience.
 - [ ] B. Design direction for the terrace intro and site style
 - [x] C. 3D test: EX-DT-01 table + LINES chair scripted in Blender (`blender/`), 26 KB + 63 KB GLB — close match to photos (`docs/3d-test/`)
 - [ ] D. Demo site structure (above)
-- [ ] E. Build: proof of concept (scene + camera) → demo pages → deploy private link
+- [ ] E. Build the intro
+  - [x] 1. Scene setup (terrace, light, first furniture)
+  - [ ] 2. Camera glide + Skip button
+  - [ ] 3. Wordmark + button reveal
+  - [ ] 4. Polish: baked lighting, bistro table + sunbed, mobile/desktop framing
 
 ## Completed
 - Repo created (empty).
 - Public research on EXXY's site and products.
 - Full site audit: platform, catalogue, projects, photos.
-- Blender scripting pipeline (`blender/build.py`) + first two models in `assets/models/`.
+- Blender scripting pipeline (`blender/build.py`) + first two models (now in `web/src/models/`).
+- Proof of concept step 1: terrace scene (`web/`) — golden-hour sun, travertine floor, colonnade, pergola, sea view, two dining sets. Private preview: https://claude.ai/artifact/4kU9GZHn6KqjpP8VAKDEyR
