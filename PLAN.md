@@ -19,21 +19,32 @@ followed by a clean, premium site experience.
 | 2 | First deliverable is a **demo for a pitch**, not the production site | No admin access yet |
 | 3 | Demo uses a **local product data file**, not a live Shopify connection | No access needed; structured so it can be swapped for Shopify later |
 | 4 | Demo is shared through a **private, non-indexed link** | It uses EXXY's name, logo and photos without their approval yet |
+| 5 | Demo = **the 3D intro only** (no catalogue/product pages yet) | Show the idea first, gather feedback, then plan the rest |
+| 6 | **$0 budget**: no paid tools or subscriptions | Use Claude Code, ChatGPT, Blender (free) and free AI 3D demos |
+| 7 | **Mobile-first**: portrait phone is the main target, desktop must also look great | Most viewers will be on phones |
+| 8 | Furniture modelled mainly by **Claude Code writing Blender Python scripts** from photos + listed dimensions; free AI image-to-3D only for comparison / cushions | EXXY's pieces are simple metal frames — scripted models are accurate, light and free |
+| 9 | Tech for the demo: **Vite + React Three Fiber + GSAP** (no Next.js yet) | One page doesn't need Next.js; components move over later |
 
 ## Open questions
 - Is the 3D scene **only the intro**, or also a browsable showroom? (Deferred — intro first; build it so it can grow.)
-- Which furniture photos are available, and from how many angles?
-- Is there a deadline for the pitch?
-- Budget for an AI image-to-3D tool (free credits only, or ~$20–30 for one month)?
+- Photos: only the public site photos for now. Need them in the repo (site is blocked from the cloud environment).
+- Which 3–5 pieces go in the scene?
+- No deadline.
 - How do customers really order (online, WhatsApp/phone, projects)? Ask EXXY during the pitch.
 - Confirm platform (Shopify?) once exxyshop.com is reachable.
 
-## Proposed demo scope
-1. **3D intro** — terrace, 3–5 real EXXY pieces, camera moves forward, logo + "Explore the collection" reveal. Skip button, short mobile version, still-image fallback.
-2. **Home page below the intro** — brand statement, collections, featured products.
-3. **Collection page + 3–4 product pages** — photos, materials, dimensions, finishes.
-4. **Inquiry** — "Request a quote" and WhatsApp buttons (form can be non-functional in the demo).
-5. **About** — the 1999 metalwork story.
+## Demo scope (intro only)
+- Outdoor terrace, 3–5 real EXXY pieces along a central path.
+- Camera glides forward (~4–6 s desktop, shorter on mobile), EXXY logo + button revealed at the far end.
+- Skip button, reduced-motion support, still-image fallback for weak devices.
+
+## Mobile performance rules
+- Compose the shot for **portrait first**, then adapt for landscape/desktop.
+- **Bake lighting and shadows in Blender** into textures (realistic look, almost free at runtime).
+- Total download target **under ~5 MB**; compressed meshes (meshopt/Draco) and textures (KTX2/WebP).
+- No real-time shadows or heavy post-processing on phones; cap pixel ratio.
+- Show a poster image instantly while the 3D loads.
+- Test on a real phone at every milestone.
 
 ## Phases
 - [x] A. Initial look at the current site (via search; full inspection pending network access)
