@@ -21,9 +21,15 @@ import bmesh  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
+import como  # noqa: E402
 import ex_dt_01  # noqa: E402
+import ex_dt_02  # noqa: E402
+import ex_ta_05  # noqa: E402
+import ex_ta_06  # noqa: E402
 import lib  # noqa: E402
 import lines  # noqa: E402
+import panama_sunbed  # noqa: E402
+import stef  # noqa: E402
 
 ASSETS = os.path.join(HERE, "assets")
 
@@ -38,10 +44,10 @@ SUN_FROM = Vector((-7, 9, 4.0))    # low sun: ahead and to the left
 SUN_COLOR = (1.0, 0.66, 0.40)
 CAMERA = {"location": (0, -9.8, 1.5), "target": (0, 9, 1.35)}
 
-SETS = [  # (x, y) of each table, table colour, chair colour
-    ((-1.85, -3.2), "#ece8e1", "#d9ccb4"),
-    ((1.85, 2.6), "#3d4043", "#6f7a58"),
-]
+# Showroom layout. The walkway (|x| < 0.9) stays clear; pieces sit in four
+# bays along both sides. Colours are from EXXY's own option lists.
+WHITE, BLACK, BEIGE, OLIVE, SAGE = "#ece8e1", "#2f3134", "#d9ccb4", "#6f7a58", "#a7b5a0"
+RED = "#a23a2c"
 
 
 # ------------------------------------------------------------------ materials
@@ -215,24 +221,54 @@ def place(obj, location, rot_z=0.0):
     return obj
 
 
+def copies(obj, placements):
+    """Place `obj` at the first placement and linked duplicates at the rest."""
+    for i, (loc, rot) in enumerate(placements):
+        o = obj if i == 0 else obj.copy()
+        if i:
+            bpy.context.collection.objects.link(o)
+        place(o, loc, rot)
+
+
+def around(x, y, offsets, spread=0.68):
+    """Chairs on both long sides of a table running along Y, facing it."""
+    return [((x + side * spread, y + dy, 0), -side * math.pi / 2) for side in (-1, 1) for dy in offsets]
+
+
+def bevelled(obj, width=0.003):
+    mod = obj.modifiers.new("Bevel", "BEVEL")
+    mod.width = width
+    mod.segments = 2
+    mod.limit_method = "ANGLE"
+    return obj
+
+
 def build_furniture():
-    for (x, y), table_color, chair_color in SETS:
-        table = ex_dt_01.build(table_color)
-        bevel = table.modifiers.new("Bevel", "BEVEL")
-        bevel.width = 0.003
-        bevel.segments = 2
-        bevel.limit_method = "ANGLE"
-        place(table, (x, y, 0), math.pi / 2)
-        chair = lines.build(chair_color)
-        first = True
-        for side in (-1, 1):
-            for dy in (-0.45, 0.45):
-                c = chair if first else chair.copy()
-                if not first:
-                    bpy.context.collection.objects.link(c)
-                first = False
-                # chairs face -Y; turn each towards the table
-                place(c, (x + side * 0.72, y + dy, 0), -side * math.pi / 2)
+    # bay 1, left: COMO lounge set around its coffee table
+    place(como.build_sofa(WHITE), (-2.95, -5.0, 0), math.pi / 2)
+    place(como.build_table(WHITE), (-1.95, -5.0, 0), math.pi / 2)
+    copies(como.build_armchair(WHITE), [((-1.8, -3.55, 0), 0.0), ((-1.8, -6.45, 0), math.pi)])
+    # bay 1, right: Panama sunbed, backrest towards the entrance, facing the sea
+    place(panama_sunbed.build(RED), (2.2, -4.9, 0), math.pi / 2)
+
+    # bay 2, left: EX-DT-01 in white with LINES chairs
+    place(bevelled(ex_dt_01.build(WHITE)), (-1.85, -0.9, 0), math.pi / 2)
+    copies(lines.build(BEIGE), around(-1.85, -0.9, (-0.45, 0.45), 0.72))
+    # bay 2, right: two bistro tables with STEF chairs
+    place(ex_ta_05.build(BLACK), (2.2, -1.9, 0))
+    place(ex_ta_06.build(BLACK), (2.2, 0.1, 0))
+    copies(stef.build(SAGE), [((2.2 + side * 0.55, y, 0), -side * math.pi / 2)
+                              for y in (-1.9, 0.1) for side in (-1, 1)])
+
+    # bay 3, left: EX-DT-02 teak table seating six
+    place(ex_dt_02.build(WHITE), (-1.95, 3.1, 0), math.pi / 2)
+    copies(stef.build(WHITE), around(-1.95, 3.1, (-0.75, 0.0, 0.75), 0.66))
+    # bay 3, right: EX-DT-01 in black with olive LINES chairs
+    place(bevelled(ex_dt_01.build(BLACK)), (1.95, 3.2, 0), math.pi / 2)
+    copies(lines.build(OLIVE), around(1.95, 3.2, (-0.45, 0.45), 0.72))
+
+    # bay 4, left: a second sunbed in white, looking out to sea
+    place(panama_sunbed.build(WHITE), (-2.2, 7.0, 0), math.pi / 2)
 
 
 def import_model(asset_id, height, location, rot_z=0.0):
@@ -260,13 +296,14 @@ def import_model(asset_id, height, location, rot_z=0.0):
 
 
 def build_planting():
-    # olive-like trees in terracotta pots, against the warm right wall
-    for (x, y, rz) in [(2.75, -7.0, 0.4), (2.75, 6.2, 2.1), (-2.8, 7.3, 1.2)]:
+    # olive-like trees in terracotta pots at the corners of the space
+    for (x, y, rz) in [(3.0, -8.9, 0.4), (3.0, 7.4, 2.1), (-3.05, 8.6, 1.2)]:
         import_model("planter_pot_clay", 0.62, (x, y, 0), rz)
         import_model("island_tree_01", 2.6, (x, y, 0.45), rz)
-    import_model("potted_plant_02", 0.9, (-1.0, FAR - 0.45, 0), 0.5)
+    import_model("potted_plant_02", 0.9, (-0.95, FAR - 0.45, 0), 0.5)
     import_model("ceramic_vase_03", 0.75, (1.1, FAR - 0.4, 0))
-    import_model("ceramic_vase_01", 0.32, (SETS[0][0][0], SETS[0][0][1] + 0.2, 0.75))
+    import_model("ceramic_vase_01", 0.32, (-1.85, -0.7, 0.75))   # on the white dining table
+    import_model("ceramic_vase_01", 0.24, (-1.95, -4.8, 0.38))   # on the coffee table
 
 
 # ------------------------------------------------------------------ light + camera
@@ -315,7 +352,7 @@ def build_lighting():
 def build_camera(portrait=True):
     cam_data = bpy.data.cameras.new("Camera")
     cam_data.sensor_fit = "HORIZONTAL"
-    cam_data.lens = 40 if portrait else 24
+    cam_data.lens = 34 if portrait else 24
     cam_data.dof.use_dof = True
     cam_data.dof.focus_distance = 9.0
     cam_data.dof.aperture_fstop = 5.6

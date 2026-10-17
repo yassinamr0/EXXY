@@ -20,7 +20,7 @@ from mathutils import Vector  # noqa: E402
 
 import lib  # noqa: E402
 
-OUT_DIR = os.path.join(HERE, "..", "web", "src", "models")
+OUT_DIR = os.path.join(HERE, "out")
 
 
 def render_preview(obj, filepath, yaw=-35, pitch=12, size=(900, 700)):
@@ -31,12 +31,12 @@ def render_preview(obj, filepath, yaw=-35, pitch=12, size=(900, 700)):
     scene.cycles.samples = 48
     scene.cycles.use_denoising = True
     scene.render.resolution_x, scene.render.resolution_y = size
-    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.view_transform = "AgX"
 
     world = bpy.data.worlds.new("studio")
     world.use_nodes = True
     world.node_tree.nodes["Background"].inputs["Color"].default_value = (1, 1, 1, 1)
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 1.0
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 1.6
     scene.world = world
 
     # floor that only catches shadows, like a seamless photo backdrop
