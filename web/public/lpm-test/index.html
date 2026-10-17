@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>EXXY intro: Low Power Mode test</title>
+<style>
+  body { margin: 0; padding: 12px 12px 40px; font: 14px/1.35 system-ui, sans-serif; background: #f2f2f2; color: #111; }
+  h1 { font-size: 17px; margin: 4px 0 6px; }
+  p { margin: 0 0 10px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { background: #fff; border-radius: 8px; padding: 8px; }
+  .tile b { display: block; font-size: 13px; margin-bottom: 2px; }
+  .media { width: 100%; aspect-ratio: 9 / 16; background: #ddd; display: block; object-fit: cover; border-radius: 4px; }
+  .status { font-size: 12px; color: #555; min-height: 2.6em; margin: 4px 0; }
+  button { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid #bbb; border-radius: 6px; background: #fafafa; }
+  .env { font-size: 12px; color: #555; background: #fff; border-radius: 8px; padding: 8px; margin-bottom: 10px; word-break: break-word; }
+</style>
+</head>
+<body>
+<h1>Low Power Mode test</h1>
+<p>Turn <b>Low Power Mode ON</b>, then reload this page. For each box, say whether the terrace
+<b>moves</b> on its own (without tapping), and whether it stops on the white logo at the end or keeps looping.</p>
+<div class="env" id="env"></div>
+
+<div class="grid">
+  <div class="tile">
+    <b>A. Video (what the site uses now)</b>
+    <video id="vid" class="media" src="/intro/portrait.mp4" poster="/intro/portrait-start.jpg" muted playsinline preload="auto"></video>
+    <div class="status" id="vid-status">starting…</div>
+    <button id="vid-btn">Tap to play</button>
+  </div>
+
+  <div class="tile">
+    <b>B. Video inside an image tag</b>
+    <img class="media replay" data-src="/intro/portrait.mp4" alt="">
+    <div class="status">Safari only</div>
+    <button class="again">Replay</button>
+  </div>
+
+  <div class="tile">
+    <b>C. Animated AVIF (761 KB)</b>
+    <img class="media replay" data-src="intro-1080.avif" alt="">
+    <div class="status">should play once</div>
+    <button class="again">Replay</button>
+  </div>
+
+  <div class="tile">
+    <b>D. Animated WebP (1.4 MB)</b>
+    <img class="media replay" data-src="intro-720.webp" alt="">
+    <div class="status">should play once</div>
+    <button class="again">Replay</button>
+  </div>
+
+  <div class="tile">
+    <b>E. Picture sequence</b>
+    <canvas id="seq" class="media" width="540" height="960"></canvas>
+    <div class="status" id="seq-status">loading…</div>
+    <button id="seq-btn">Replay</button>
+  </div>
+</div>
+
+<script>
+  const env = document.getElementById('env')
+  const rm = matchMedia('(prefers-reduced-motion: reduce)').matches
+  env.textContent = `Reduce Motion: ${rm ? 'ON' : 'off'} · Data saver: ${navigator.connection?.saveData ? 'ON' : 'off/unknown'} · ${navigator.userAgent}`
+
+  // A: the real <video>, started the same way as the site
+  const vid = document.getElementById('vid')
+  const vs = document.getElementById('vid-status')
+  vid.muted = vid.defaultMuted = true
+  vid.setAttribute('muted', '')
+  const start = () => vid.play().then(
+    () => { vs.textContent = 'playing' },
+    (e) => { vs.textContent = `blocked: ${e.name}` })
+  start()
+  vid.addEventListener('ended', () => { vs.textContent = 'finished' })
+  document.getElementById('vid-btn').onclick = () => { vid.currentTime = 0; start() }
+
+  // B, C, D: images; a fresh URL restarts the animation
+  document.querySelectorAll('.tile').forEach((tile) => {
+    const img = tile.querySelector('img.replay')
+    if (!img) return
+    const load = () => { img.src = `${img.dataset.src}?r=${performance.now()}` }
+    tile.querySelector('.again').onclick = load
+    load()
+  })
+
+  // E: JPEG frames drawn to a canvas at 24 fps; the last frame is held
+  const N = 66, FPS = 24
+  const canvas = document.getElementById('seq'), ctx = canvas.getContext('2d')
+  const ss = document.getElementById('seq-status')
+  const frames = Array.from({ length: N }, (_, i) => {
+    const im = new Image()
+    im.src = `seq/${String(i + 1).padStart(3, '0')}.jpg`
+    return im
+  })
+  let drawn = 0
+  const play = () => {
+    const t0 = performance.now()
+    const tick = (now) => {
+      const f = Math.min(N - 1, Math.floor((now - t0) / 1000 * FPS))
+      ctx.drawImage(frames[f], 0, 0, canvas.width, canvas.height)
+      drawn++
+      if (f < N - 1) requestAnimationFrame(tick)
+      else ss.textContent = `finished: ${drawn} draws in ${Math.round(now - t0)} ms`
+    }
+    drawn = 0
+    requestAnimationFrame(tick)
+  }
+  Promise.all(frames.map((im) => im.decode())).then(play, () => { ss.textContent = 'failed to load frames' })
+  document.getElementById('seq-btn').onclick = play
+</script>
+</body>
+</html>
