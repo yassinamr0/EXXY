@@ -8,15 +8,37 @@ const VIDEO = `${BASE}intro/`
 // The camera lands (and the wall has bloomed to pure white) at 2.6 s
 // (blender/terrace.py GLIDE_LAND / BLOOM): that is when the page takes over.
 const LAND_AT = 2.6
-// If the video hasn't started by then (slow network, Low Power Mode), go
-// straight to the page instead of showing a frozen first frame.
-const STALL_MS = 4000
+// The intro never skips itself because a browser was cautious. If it won't
+// start on its own (autoplay blocked: Opera, Brave, Firefox settings, in-app
+// browsers; or a play() that just hangs), the first frame stays up with an
+// "Enter site" button and the first tap anywhere starts it. Only a video the
+// browser can't play at all, or one that still won't play after that tap,
+// goes straight to the page.
+// No visible progress this long after asking to play: ask for a tap.
+const START_MS = 2500
+// Buffering this long (visible tab only, reset whenever playback advances):
+// ask for a tap; this long again after the tap: give up and show the page.
+const STALL_MS = 12000
 
 const portraitQuery = matchMedia('(max-aspect-ratio: 1/1)')
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
-const saveData = navigator.connection?.saveData === true
+
+// H.264 MP4 plays almost everywhere; VP9 WebM covers browsers without H.264
+// (Firefox on Windows N, some Linux builds). Pick the one the browser says it
+// can play, and fall back to the other if it fails anyway.
+function videoSources(shape) {
+  const mp4 = `${VIDEO}${shape}.mp4`
+  const webm = `${VIDEO}${shape}.webm`
+  const probe = document.createElement('video')
+  const h264 = probe.canPlayType('video/mp4; codecs="avc1.640028"')
+  const vp9 = probe.canPlayType('video/webm; codecs="vp9"')
+  return !h264 && vp9 ? [webm, mp4] : [mp4, webm]
+}
 // ?debug shows why the intro skipped to the page, and the screen measurements
 const debug = new URLSearchParams(location.search).has('debug')
+// ?autoplay=blocked or ?autoplay=hang acts like a browser that refuses or
+// ignores autoplay (Opera, Brave...), to test the "Enter site" path anywhere
+const autoplayTest = new URLSearchParams(location.search).get('autoplay')
 
 // Edge to edge on iPhone. Safari on iOS 26 never draws pinned (position: fixed)
 // content behind the status bar or the floating toolbar; it paints a flat colour
@@ -95,17 +117,20 @@ export default function Intro() {
   const measured = useFullBleed(orientation)
   // the video is picked once, for the screen shape at load
   const [videoOrientation] = useState(orientation)
-  const [landed, setLanded] = useState(reducedMotion || saveData)
-  const [videoDone, setVideoDone] = useState(reducedMotion || saveData)
-  const [why, setWhy] = useState(
-    reducedMotion ? 'reduce motion is on' : saveData ? 'data saver is on' : 'playing')
+  const [sources] = useState(() => videoSources(videoOrientation))
+  const [landed, setLanded] = useState(false)
+  const [videoDone, setVideoDone] = useState(false)
+  const [needsTap, setNeedsTap] = useState(false)
+  const [why, setWhy] = useState('starting')
   const video = useRef(null)
   const stage = useRef(null)
+  const enterSite = useRef(null)
 
   const finish = (reason) => {
-    setWhy((current) => (current === 'playing' ? reason : current))
+    setWhy(reason)
     setLanded(true)
     setVideoDone(true)
+    setNeedsTap(false)
   }
 
   // play, and hand over to the page when the camera lands
@@ -113,30 +138,110 @@ export default function Intro() {
     const v = video.current
     if (!v) return
     let frame
+    let disposed = false
+    let waiting = false     // showing "Enter site"
+    let tapped = false      // the visitor already asked to play
+    let source = 0
+    let previousTime = v.currentTime
+    let lastTick = performance.now()
+    let idleFor = 0         // visible time without playback advancing
     const watch = () => {
-      if (v.currentTime >= LAND_AT) return setLanded(true)
+      if (disposed) return
+      if (v.currentTime >= LAND_AT) setLanded(true)
       frame = requestAnimationFrame(watch)
+    }
+    const askForTap = (reason) => {
+      if (tapped) return finish(`${reason} after Enter site`)
+      waiting = true
+      setNeedsTap(true)
+      setWhy(`${reason}: waiting for Enter site`)
     }
     // phones only autoplay video that is muted as an attribute, not just a property
     v.muted = v.defaultMuted = true
     v.setAttribute('muted', '')
-    v.play().then(watch, (e) => finish(`play() refused: ${e.name}`))
-    const stall = setTimeout(
-      () => v.currentTime < 0.1 && finish(`no frame after ${STALL_MS / 1000}s (readyState ${v.readyState})`),
-      STALL_MS)
-    const failed = () => finish(`video error ${v.error?.code}`)
-    v.addEventListener('error', failed)
-    return () => {
-      cancelAnimationFrame(frame)
-      clearTimeout(stall)
-      v.removeEventListener('error', failed)
+    const play = () => {
+      idleFor = 0
+      lastTick = performance.now()
+      const request = autoplayTest && !tapped
+        ? (autoplayTest === 'hang' ? new Promise(() => {})
+          : Promise.reject(new DOMException('test', 'NotAllowedError')))
+        : v.play()
+      request.then(() => {
+        if (disposed) return
+        waiting = false
+        setNeedsTap(false)
+        setWhy('playing')
+      }, (e) => {
+        // AbortError only means a newer load()/play() replaced this one
+        if (!disposed && e.name !== 'AbortError') askForTap(`play() refused: ${e.name}`)
+      })
     }
-  }, [])
-
-  // turning the phone mid-intro skips to the page, laid out for the new shape
-  useEffect(() => {
-    if (orientation !== videoOrientation) finish('screen rotated')
-  }, [orientation, videoOrientation])
+    // called straight from the tap/click/key handler, so the browser sees the gesture
+    const enter = () => {
+      if (!waiting || disposed) return
+      waiting = false
+      tapped = true
+      setNeedsTap(false)
+      setWhy('Enter site pressed')
+      play()
+    }
+    enterSite.current = enter
+    const failed = () => {
+      if (source + 1 < sources.length) {
+        source += 1
+        setWhy(`video error ${v.error?.code}, trying ${sources[source].split('/').pop()}`)
+        v.src = sources[source]
+        v.load()
+        if (!waiting) play()
+      } else {
+        finish(`video error ${v.error?.code} (${videoOrientation})`)
+      }
+    }
+    const visibilityChanged = () => {
+      lastTick = performance.now()
+      idleFor = 0
+      if (!document.hidden && !waiting && v.paused && !v.ended) play()
+    }
+    v.addEventListener('error', failed)
+    // backup for watch(): animation frames pause in background tabs
+    const timeUpdate = () => v.currentTime >= LAND_AT && setLanded(true)
+    v.addEventListener('timeupdate', timeUpdate)
+    document.addEventListener('visibilitychange', visibilityChanged)
+    // the first tap or key anywhere counts as "Enter site"
+    window.addEventListener('click', enter)
+    window.addEventListener('touchend', enter)
+    window.addEventListener('keydown', enter)
+    if (!document.hidden) play()
+    watch()
+    const watchdog = setInterval(() => {
+      const now = performance.now()
+      if (!document.hidden && !waiting && v.currentTime === previousTime && !v.ended) {
+        idleFor += now - lastTick
+      } else {
+        idleFor = 0
+      }
+      previousTime = v.currentTime
+      lastTick = now
+      if (waiting) return
+      // paused and going nowhere: autoplay was blocked without saying so
+      if (v.paused && idleFor >= START_MS) askForTap(`not started after ${START_MS / 1000}s`)
+      else if (idleFor >= STALL_MS) {
+        askForTap(`stalled ${STALL_MS / 1000}s (readyState ${v.readyState}, networkState ${v.networkState})`)
+      }
+    }, 250)
+    return () => {
+      disposed = true
+      enterSite.current = null
+      cancelAnimationFrame(frame)
+      clearInterval(watchdog)
+      v.removeEventListener('error', failed)
+      v.removeEventListener('timeupdate', timeUpdate)
+      document.removeEventListener('visibilitychange', visibilityChanged)
+      window.removeEventListener('click', enter)
+      window.removeEventListener('touchend', enter)
+      window.removeEventListener('keydown', enter)
+    }
+  }, [videoDone])
 
   // the page's only motion: the words and button appear once the screen is white
   useLayoutEffect(() => {
@@ -148,25 +253,36 @@ export default function Intro() {
   }, [landed])
 
   return (
-    <main className={`intro ${orientation}`}>
+    // while the video plays the stage keeps the video's shape (a resize or a
+    // turned phone just crops it differently); afterwards it follows the screen
+    <main className={`intro ${videoDone ? orientation : videoOrientation}`}>
       <div className="stage" ref={stage}>
         {/* sits exactly where the logo lands in the video, so the handover is invisible */}
         <h1 className="mark">
           <img src={`${BASE}exxy-logo.svg`} alt="EXXY" />
         </h1>
 
-        {!videoDone && orientation === videoOrientation && (
+        {!videoDone && (
           <video
             ref={video}
             className="backdrop"
-            src={`${VIDEO}${videoOrientation}.mp4`}
+            src={sources[0]}
             poster={`${VIDEO}${videoOrientation}-start.jpg`}
             muted
+            autoPlay={!autoplayTest}
             playsInline
             preload="auto"
             aria-hidden="true"
-            onEnded={() => setVideoDone(true)}
+            onEnded={() => finish('video ended')}
           />
+        )}
+
+        {needsTap && !videoDone && (
+          <div className="entry-prompt">
+            <button type="button" className="shop">
+              Enter site
+            </button>
+          </div>
         )}
 
         {landed && (
