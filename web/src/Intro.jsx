@@ -8,16 +8,11 @@ const VIDEO = `${BASE}intro/`
 // The camera lands (and the wall has bloomed to pure white) at 2.6 s
 // (blender/terrace.py GLIDE_LAND / BLOOM): that is when the page takes over.
 const LAND_AT = 2.6
-// The intro never skips itself because a browser was cautious. If it won't
-// start on its own (autoplay blocked: Opera, Brave, Firefox settings, in-app
-// browsers; or a play() that just hangs), the first frame stays up with an
-// "Enter site" button and the first tap anywhere starts it. Only a video the
-// browser can't play at all, or one that still won't play after that tap,
-// goes straight to the page.
-// No visible progress this long after asking to play: ask for a tap.
+// Play automatically. If playback is blocked or cannot start, show the page.
+// No visible progress this long after asking to play: show the page.
 const START_MS = 2500
 // Buffering this long (visible tab only, reset whenever playback advances):
-// ask for a tap; this long again after the tap: give up and show the page.
+// give up and show the page.
 const STALL_MS = 12000
 
 const portraitQuery = matchMedia('(max-aspect-ratio: 1/1)')
@@ -37,7 +32,7 @@ function videoSources(shape) {
 // ?debug shows why the intro skipped to the page, and the screen measurements
 const debug = new URLSearchParams(location.search).has('debug')
 // ?autoplay=blocked or ?autoplay=hang acts like a browser that refuses or
-// ignores autoplay (Opera, Brave...), to test the "Enter site" path anywhere
+// ignores autoplay (Opera, Brave...), to test the automatic fallback anywhere
 const autoplayTest = new URLSearchParams(location.search).get('autoplay')
 
 // Edge to edge on iPhone. Safari on iOS 26 never draws pinned (position: fixed)
@@ -120,17 +115,14 @@ export default function Intro() {
   const [sources] = useState(() => videoSources(videoOrientation))
   const [landed, setLanded] = useState(false)
   const [videoDone, setVideoDone] = useState(false)
-  const [needsTap, setNeedsTap] = useState(false)
   const [why, setWhy] = useState('starting')
   const video = useRef(null)
   const stage = useRef(null)
-  const enterSite = useRef(null)
 
   const finish = (reason) => {
     setWhy(reason)
     setLanded(true)
     setVideoDone(true)
-    setNeedsTap(false)
   }
 
   // play, and hand over to the page when the camera lands
@@ -139,8 +131,6 @@ export default function Intro() {
     if (!v) return
     let frame
     let disposed = false
-    let waiting = false     // showing "Enter site"
-    let tapped = false      // the visitor already asked to play
     let source = 0
     let previousTime = v.currentTime
     let lastTick = performance.now()
@@ -150,49 +140,31 @@ export default function Intro() {
       if (v.currentTime >= LAND_AT) setLanded(true)
       frame = requestAnimationFrame(watch)
     }
-    const askForTap = (reason) => {
-      if (tapped) return finish(`${reason} after Enter site`)
-      waiting = true
-      setNeedsTap(true)
-      setWhy(`${reason}: waiting for Enter site`)
-    }
     // phones only autoplay video that is muted as an attribute, not just a property
     v.muted = v.defaultMuted = true
     v.setAttribute('muted', '')
     const play = () => {
       idleFor = 0
       lastTick = performance.now()
-      const request = autoplayTest && !tapped
+      const request = autoplayTest
         ? (autoplayTest === 'hang' ? new Promise(() => {})
           : Promise.reject(new DOMException('test', 'NotAllowedError')))
         : v.play()
       request.then(() => {
         if (disposed) return
-        waiting = false
-        setNeedsTap(false)
         setWhy('playing')
       }, (e) => {
         // AbortError only means a newer load()/play() replaced this one
-        if (!disposed && e.name !== 'AbortError') askForTap(`play() refused: ${e.name}`)
+        if (!disposed && e.name !== 'AbortError') finish(`play() refused: ${e.name}`)
       })
     }
-    // called straight from the tap/click/key handler, so the browser sees the gesture
-    const enter = () => {
-      if (!waiting || disposed) return
-      waiting = false
-      tapped = true
-      setNeedsTap(false)
-      setWhy('Enter site pressed')
-      play()
-    }
-    enterSite.current = enter
     const failed = () => {
       if (source + 1 < sources.length) {
         source += 1
         setWhy(`video error ${v.error?.code}, trying ${sources[source].split('/').pop()}`)
         v.src = sources[source]
         v.load()
-        if (!waiting) play()
+        play()
       } else {
         finish(`video error ${v.error?.code} (${videoOrientation})`)
       }
@@ -200,46 +172,37 @@ export default function Intro() {
     const visibilityChanged = () => {
       lastTick = performance.now()
       idleFor = 0
-      if (!document.hidden && !waiting && v.paused && !v.ended) play()
+      if (!document.hidden && v.paused && !v.ended) play()
     }
     v.addEventListener('error', failed)
     // backup for watch(): animation frames pause in background tabs
     const timeUpdate = () => v.currentTime >= LAND_AT && setLanded(true)
     v.addEventListener('timeupdate', timeUpdate)
     document.addEventListener('visibilitychange', visibilityChanged)
-    // the first tap or key anywhere counts as "Enter site"
-    window.addEventListener('click', enter)
-    window.addEventListener('touchend', enter)
-    window.addEventListener('keydown', enter)
     if (!document.hidden) play()
     watch()
     const watchdog = setInterval(() => {
       const now = performance.now()
-      if (!document.hidden && !waiting && v.currentTime === previousTime && !v.ended) {
+      if (!document.hidden && v.currentTime === previousTime && !v.ended) {
         idleFor += now - lastTick
       } else {
         idleFor = 0
       }
       previousTime = v.currentTime
       lastTick = now
-      if (waiting) return
       // paused and going nowhere: autoplay was blocked without saying so
-      if (v.paused && idleFor >= START_MS) askForTap(`not started after ${START_MS / 1000}s`)
+      if (v.paused && idleFor >= START_MS) finish(`not started after ${START_MS / 1000}s`)
       else if (idleFor >= STALL_MS) {
-        askForTap(`stalled ${STALL_MS / 1000}s (readyState ${v.readyState}, networkState ${v.networkState})`)
+        finish(`stalled ${STALL_MS / 1000}s (readyState ${v.readyState}, networkState ${v.networkState})`)
       }
     }, 250)
     return () => {
       disposed = true
-      enterSite.current = null
       cancelAnimationFrame(frame)
       clearInterval(watchdog)
       v.removeEventListener('error', failed)
       v.removeEventListener('timeupdate', timeUpdate)
       document.removeEventListener('visibilitychange', visibilityChanged)
-      window.removeEventListener('click', enter)
-      window.removeEventListener('touchend', enter)
-      window.removeEventListener('keydown', enter)
     }
   }, [videoDone])
 
@@ -275,14 +238,6 @@ export default function Intro() {
             aria-hidden="true"
             onEnded={() => finish('video ended')}
           />
-        )}
-
-        {needsTap && !videoDone && (
-          <div className="entry-prompt">
-            <button type="button" className="shop">
-              Enter site
-            </button>
-          </div>
         )}
 
         {landed && (
