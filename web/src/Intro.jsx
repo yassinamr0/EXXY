@@ -33,7 +33,30 @@ function videoSources(shape) {
 const debug = new URLSearchParams(location.search).has('debug')
 // ?autoplay=blocked or ?autoplay=hang acts like a browser that refuses or
 // ignores autoplay (Opera, Brave...), to test the automatic fallback anywhere
-const autoplayTest = new URLSearchParams(location.search).get('autoplay')
+const requestedAutoplayTest = new URLSearchParams(location.search).get('autoplay')
+const autoplayTest = debug && ['blocked', 'hang'].includes(requestedAutoplayTest)
+  ? requestedAutoplayTest : null
+
+// Keep the rejection context after the video is removed. The error name alone
+// cannot distinguish browser settings, an embedding policy, or a test failure.
+function playbackDiagnostics(v, error) {
+  const read = (get) => {
+    try { return get() ?? 'unknown' } catch { return 'unavailable' }
+  }
+  const policy = document.permissionsPolicy || document.featurePolicy
+  return [
+    'autoplay audit v1',
+    `message: ${error.message || '(none)'}`,
+    `test: ${autoplayTest || 'off'}; embedded: ${window.top !== window.self}`,
+    `muted: ${v.muted}; defaultMuted: ${v.defaultMuted}; volume: ${v.volume}`,
+    `autoplay policy: ${read(() => navigator.getAutoplayPolicy?.(v))}`,
+    `document allows autoplay: ${read(() => policy?.allowsFeature('autoplay'))}`,
+    `visibility: ${document.visibilityState}; active: ${read(() => navigator.userActivation?.isActive)}`,
+    `source: ${(v.currentSrc || v.src).split('/').pop()}`,
+    `ready: ${v.readyState}; network: ${v.networkState}; time: ${v.currentTime}`,
+    `media error: ${v.error?.code ?? 'none'} ${v.error?.message || ''}`,
+  ].join('\n')
+}
 
 // Edge to edge on iPhone. Safari on iOS 26 never draws pinned (position: fixed)
 // content behind the status bar or the floating toolbar; it paints a flat colour
@@ -155,7 +178,9 @@ export default function Intro() {
         setWhy('playing')
       }, (e) => {
         // AbortError only means a newer load()/play() replaced this one
-        if (!disposed && e.name !== 'AbortError') finish(`play() refused: ${e.name}`)
+        if (!disposed && e.name !== 'AbortError') {
+          finish(`play() refused: ${e.name}${debug ? `\n${playbackDiagnostics(v, e)}` : ''}`)
+        }
       })
     }
     const failed = () => {
